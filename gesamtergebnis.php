@@ -53,6 +53,7 @@ function geg_trace_bootstrap_phase( $phase ) {
 			'uri'         => isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '',
 			'script_name' => isset( $_SERVER['SCRIPT_NAME'] ) ? wp_unslash( $_SERVER['SCRIPT_NAME'] ) : '',
 			'get'         => geg_sanitize_request_array( $_GET ),
+			'response'    => geg_get_response_state(),
 		)
 	);
 }
@@ -92,9 +93,30 @@ function geg_trace_current_screen( $screen ) {
 		'debug',
 		'Current screen resolved.',
 		array(
-			'id'   => isset( $screen->id ) ? $screen->id : '',
-			'base' => isset( $screen->base ) ? $screen->base : '',
+			'id'       => isset( $screen->id ) ? $screen->id : '',
+			'base'     => isset( $screen->base ) ? $screen->base : '',
+			'response' => geg_get_response_state(),
 		)
+	);
+}
+
+/**
+ * Capture current response state for redirect debugging.
+ *
+ * @return array<string,mixed>
+ */
+function geg_get_response_state() {
+	$headers_sent = headers_sent( $file, $line );
+	$headers_list = function_exists( 'headers_list' ) ? headers_list() : array();
+
+	return array(
+		'headers_sent'   => $headers_sent,
+		'headers_file'   => $file,
+		'headers_line'   => $line,
+		'ob_level'       => ob_get_level(),
+		'ob_length'      => function_exists( 'ob_get_length' ) ? ob_get_length() : false,
+		'output_buffers' => geg_describe_output_buffers(),
+		'headers'        => array_slice( is_array( $headers_list ) ? $headers_list : array(), 0, 20 ),
 	);
 }
 
@@ -157,6 +179,7 @@ function geg_sanitize_request_array( $request ) {
  */
 function geg_handle_activation() {
 	$checks = geg_collect_environment_checks();
+	geg_trace_bootstrap_phase( 'activation_hook_start' );
 
 	geg_write_log(
 		'info',
@@ -171,11 +194,13 @@ function geg_handle_activation() {
 	if ( ! empty( $checks['warnings'] ) ) {
 		set_transient( 'geg_admin_notices', $checks['warnings'], MINUTE_IN_SECONDS * 10 );
 		geg_write_log( 'warning', 'Plugin activation completed with warnings.', array( 'warnings' => $checks['warnings'] ) );
+		geg_trace_bootstrap_phase( 'activation_hook_end_with_warnings' );
 		return;
 	}
 
 	delete_transient( 'geg_admin_notices' );
 	geg_write_log( 'info', 'Plugin activation completed successfully.' );
+	geg_trace_bootstrap_phase( 'activation_hook_end_success' );
 }
 
 /**
@@ -253,12 +278,7 @@ function geg_capture_shutdown_error() {
 				'Request finished without fatal shutdown error.',
 				array(
 					'uri'            => isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '',
-					'headers_sent'   => headers_sent( $file, $line ),
-					'headers_file'   => isset( $file ) ? $file : '',
-					'headers_line'   => isset( $line ) ? $line : 0,
-					'ob_level'       => ob_get_level(),
-					'ob_length'      => function_exists( 'ob_get_length' ) ? ob_get_length() : false,
-					'output_buffers' => geg_describe_output_buffers(),
+					'response'       => geg_get_response_state(),
 					'memory_peak_mb' => round( memory_get_peak_usage( true ) / 1048576, 2 ),
 				)
 			);
