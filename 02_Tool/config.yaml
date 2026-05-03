@@ -1,0 +1,108 @@
+# This dict describes how the fahrer_kategorie from the API is translated to the category, where the fahrer is compiting in
+Basics:
+  loglevel: "INFO" # search for python leglevels
+
+DbConnection:
+  name: "racedays"
+  host: "racedays.ch2oe0w0olje.eu-central-1.rds.amazonaws.com"
+  user: "admin"
+  password: "pIzzyf-4xagnu-daktax"
+
+# you can scecify or leave it blank :
+# The values are in inch!
+# bottom,footer ,header,left,right,top
+ExcelFormat:
+  margins:
+    top: 1.6
+
+Outputfiles:
+  gesamt: "../01_Data/results/gesamt.xlsx"
+  team: "../01_Data/results/team.xlsx"
+  punkte: "../01_Data/results/punkte.xlsx"
+  mit_berechnung_rundenrueckstand: False
+  berechnungsmethode_team: "gesamt" # hier tages oder gesamt eingeben
+  numberbestriderperrating_category:
+    {
+      "Jugend männlich U17": 3,
+      "Jugend weiblich U17": 3,
+      "Junioren U19": 2,
+      "Elite Frauen": 4,
+      "Elite-Amateur-U23": 4,
+    }
+
+ResultFilesSetup:
+  race_name2result_file:
+    {
+      "Plattenhardt": "../01_Data/ingest/Ergebnis Plattenhardt 16.06.2022.xlsx",
+      "Waldau": "../01_Data/ingest/Ergebnis Waldau 17.06.2022.xlsx",
+      "Vaihingen": "../01_Data/ingest/Ergebnis Vaihingen 18.06.2022.xlsx",
+      "Magstadt": "../01_Data/ingest/Ergebnis Magstadt 19.06.2022.xlsx",
+    }
+
+  time_for_not_start_in_s: 32400
+  # Nach diesen Namen wird als zwischenüberschriften innerhalb den Exceln gesucht
+  # Falls mehr oder andere Ywischenüberschriften vorhanden sind, kann es zu fehlern kommen!
+  # Deprecated!!!
+  # search_rating_category:
+  #   [
+  #     "Jugend männlich U17",
+  #     "Junioren U19",
+  #     "Elite Frauen",
+  #     "Jugend weiblich U17",
+  #     "U19 weiblich",
+  #     "Elite Männer",
+  #   ]
+  excel_rating_category2rating_category:
+    {
+      "Jugend männlich U17": "Jugend männlich U17",
+      "Jugend weiblich U17": "Jugend weiblich U17",
+      "U19 weiblich": "Juniorinnen U19",
+      "Junioren U19": "Junioren U19",
+      "Elite Frauen": "Elite Frauen",
+      "Elite Männer": "Elite-Amateur-U23",
+    }
+  excel2sql_colname:
+    {
+      "Pos.": "position",
+      "Nr.": "startnummer",
+      "Name": "name",
+      "Vorname": "vorname",
+      "Anz.Rd.": "anzahl_runden",
+      "Gesamtzeit": "totale_zeit",
+      "wertungskategorie": "wertungskategorie",
+      "kein_valides_ergebnis": "kein_valides_ergebnis",
+      "renn_ort": "renn_ort",
+      "time_in_s": time_in_s,
+    }
+
+PointsExcel:
+  # This is the file where the point wertungen are described (From Bene)
+  raw_point_excel_path: "../01_Data/setup/Punktewertung Elite Amateure Nachwuchs Endversion.xlsx"
+  # The automatic generated template from raw_point_excel_path to fill in the Results during the race
+  manual_result_template: "../01_Data/setup/Punkte_template.xlsx"
+  # The template file filled out
+  manual_result: "../01_Data/ingest/Punkte_template_filled.xlsx"
+  race_locations: ["Plattenhardt", "Waldau", "Vaihingen", "Magstadt"]
+  excel_rating_category2rating_category:
+    {
+      "Rennen U17w": "Jugend weiblich U17",
+      "Rennen U17m": "Jugend männlich U17",
+      "Rennen Frauen": "Elite Frauen",
+      "Rennen Junioren U19": "Junioren U19",
+      "Rennen Elite-Amateur": "Elite-Amateur-U23",
+    }
+
+StarterAPISetup:
+  rider_category2rating_category:
+    {
+      "Jugend weiblich U17": "Jugend weiblich U17",
+      "Jugend männlich U17": "Jugend männlich U17",
+      "Rad-Bundesliga Junioren U19": "Junioren U19",
+      "Junioren U19": "Junioren U19",
+      "UCI-Sportgruppen Frauen und Frauen Elite": "Elite Frauen",
+      "Rad-Bundesliga Frauen": "Elite Frauen",
+      "Juniorinnen U19": "Elite Frauen",
+      "Elite Amateure": "Elite-Amateur-U23",
+      "Männer U23": "Elite-Amateur-U23",
+      "Amateur": "Elite-Amateur-U23",
+    }
