@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "racedayresults"
+version = "0.1.0"
+description = "Helper scripts for the RaceDaysStuttgart"
+authors = ["JonasHablitzel <Jonas.Hablitzel@gmx.de>"]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+openpyxl = "^3.0.10"
+pandas = "^1.4.2"
+PyYAML = "^6.0"
+SQLAlchemy = "^1.4.37"
+PyMySQL = "^1.0.2"
+mysql-connector = "^2.2.9"
+fuzzpyxl = "^0.0.4"
+
+[tool.poetry.dev-dependencies]
+black = "^22.3.0"
+pylint = "^2.14.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
