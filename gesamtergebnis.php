@@ -201,6 +201,83 @@ function geg_handle_activation() {
 	delete_transient( 'geg_admin_notices' );
 	geg_write_log( 'info', 'Plugin activation completed successfully.' );
 	geg_trace_bootstrap_phase( 'activation_hook_end_success' );
+
+	geg_maybe_render_activation_redirect_fallback();
+}
+
+/**
+ * Fallback for environments where another plugin has already sent output.
+ *
+ * WordPress will call wp_redirect() after activation and then exit. If headers were
+ * sent too early by a third-party plugin, that redirect fails and the user sees a
+ * white screen. This fallback performs a client-side redirect only in that case.
+ */
+function geg_maybe_render_activation_redirect_fallback() {
+	if ( ! geg_is_current_plugin_activation_request() ) {
+		return;
+	}
+
+	$headers_sent = headers_sent();
+
+	if ( ! $headers_sent ) {
+		return;
+	}
+
+	$redirect_url = geg_get_activation_return_url();
+
+	geg_write_log(
+		'warning',
+		'Activation redirect fallback rendered because headers were already sent.',
+		array(
+			'redirect_url' => $redirect_url,
+		)
+	);
+
+	echo '<!doctype html><html><head><meta charset="utf-8"><title>Weiterleitung</title>';
+	echo '<meta http-equiv="refresh" content="0;url=' . esc_url( $redirect_url ) . '">';
+	echo '</head><body>';
+	echo '<script>window.location.href=' . wp_json_encode( $redirect_url ) . ';</script>';
+	echo '<p>Weiterleitung zur Plugin-Uebersicht...</p>';
+	echo '<p><a href="' . esc_url( $redirect_url ) . '">Falls die Weiterleitung nicht automatisch funktioniert, hier klicken.</a></p>';
+	echo '</body></html>';
+	exit;
+}
+
+/**
+ * Check whether this request is activating this plugin.
+ *
+ * @return bool
+ */
+function geg_is_current_plugin_activation_request() {
+	$action = isset( $_GET['action'] ) ? sanitize_key( (string) wp_unslash( $_GET['action'] ) ) : '';
+	$plugin = isset( $_GET['plugin'] ) ? sanitize_text_field( (string) wp_unslash( $_GET['plugin'] ) ) : '';
+
+	if ( 'activate' !== $action ) {
+		return false;
+	}
+
+	return plugin_basename( __FILE__ ) === $plugin;
+}
+
+/**
+ * Build return URL for activation fallback.
+ *
+ * @return string
+ */
+function geg_get_activation_return_url() {
+	$args = array(
+		'activate' => 'true',
+	);
+
+	$passthrough_keys = array( 'plugin_status', 'paged', 's' );
+
+	foreach ( $passthrough_keys as $key ) {
+		if ( isset( $_GET[ $key ] ) ) {
+			$args[ $key ] = sanitize_text_field( (string) wp_unslash( $_GET[ $key ] ) );
+		}
+	}
+
+	return add_query_arg( $args, self_admin_url( 'plugins.php' ) );
 }
 
 /**
