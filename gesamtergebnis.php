@@ -46,11 +46,13 @@ function geg_handle_activation() {
 
 	if ( ! empty( $checks['warnings'] ) ) {
 		set_transient( 'geg_admin_notices', $checks['warnings'], MINUTE_IN_SECONDS * 10 );
+		delete_transient( 'geg_admin_success_notice' );
 		geg_write_log( 'warning', 'Plugin activation completed with warnings.', array( 'warnings' => $checks['warnings'] ) );
 		return;
 	}
 
 	delete_transient( 'geg_admin_notices' );
+	set_transient( 'geg_admin_success_notice', 'Gesamtergebnis-Etappenrennen wurde erfolgreich aktiviert.', MINUTE_IN_SECONDS * 10 );
 	geg_write_log( 'info', 'Plugin activation completed successfully.' );
 }
 
@@ -59,6 +61,16 @@ function geg_handle_activation() {
  */
 function geg_render_admin_notices() {
 	$messages = get_transient( 'geg_admin_notices' );
+	$success  = get_transient( 'geg_admin_success_notice' );
+
+	if ( is_string( $success ) && '' !== $success ) {
+		printf(
+			'<div class="notice notice-success is-dismissible"><p>%s</p></div>',
+			esc_html( $success )
+		);
+
+		delete_transient( 'geg_admin_success_notice' );
+	}
 
 	if ( empty( $messages ) || ! is_array( $messages ) ) {
 		return;
