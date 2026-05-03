@@ -20,158 +20,12 @@ defined( 'GESAMTERGEBNIS_TOOL_DIR' ) || define( 'GESAMTERGEBNIS_TOOL_DIR', GESAM
 defined( 'GESAMTERGEBNIS_LOG_DIR' ) || define( 'GESAMTERGEBNIS_LOG_DIR', GESAMTERGEBNIS_PLUGIN_DIR . 'logs/' );
 defined( 'GESAMTERGEBNIS_LOG_FILE' ) || define( 'GESAMTERGEBNIS_LOG_FILE', GESAMTERGEBNIS_LOG_DIR . 'gesamtergebnis.log' );
 
-geg_trace_bootstrap_phase( 'plugin_file_loaded' );
-
 register_shutdown_function( 'geg_capture_shutdown_error' );
 register_activation_hook( __FILE__, 'geg_handle_activation' );
 
 if ( is_admin() ) {
-	geg_trace_bootstrap_phase( 'is_admin_true' );
 	add_action( 'admin_menu', 'geg_register_tools_pages' );
 	add_action( 'admin_notices', 'geg_render_admin_notices' );
-	add_action( 'plugins_loaded', 'geg_trace_plugins_loaded', 1 );
-	add_action( 'admin_init', 'geg_trace_admin_init', 1 );
-	add_action( 'current_screen', 'geg_trace_current_screen', 1 );
-	add_action( 'load-plugins.php', 'geg_trace_load_plugins_page', 1 );
-}
-
-/**
- * Trace plugin bootstrap during relevant admin requests.
- *
- * @param string $phase Marker for the current phase.
- */
-function geg_trace_bootstrap_phase( $phase ) {
-	if ( ! geg_should_trace_request() ) {
-		return;
-	}
-
-	geg_write_log(
-		'debug',
-		'Bootstrap phase reached.',
-		array(
-			'phase'       => $phase,
-			'uri'         => isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '',
-			'script_name' => isset( $_SERVER['SCRIPT_NAME'] ) ? wp_unslash( $_SERVER['SCRIPT_NAME'] ) : '',
-			'get'         => geg_sanitize_request_array( $_GET ),
-			'response'    => geg_get_response_state(),
-		)
-	);
-}
-
-/**
- * Trace plugins_loaded for the current request.
- */
-function geg_trace_plugins_loaded() {
-	geg_trace_bootstrap_phase( 'plugins_loaded' );
-}
-
-/**
- * Trace admin_init for the current request.
- */
-function geg_trace_admin_init() {
-	geg_trace_bootstrap_phase( 'admin_init' );
-}
-
-/**
- * Trace loading of plugins.php.
- */
-function geg_trace_load_plugins_page() {
-	geg_trace_bootstrap_phase( 'load_plugins_php' );
-}
-
-/**
- * Trace current admin screen.
- *
- * @param WP_Screen $screen Current screen object.
- */
-function geg_trace_current_screen( $screen ) {
-	if ( ! geg_should_trace_request() ) {
-		return;
-	}
-
-	geg_write_log(
-		'debug',
-		'Current screen resolved.',
-		array(
-			'id'       => isset( $screen->id ) ? $screen->id : '',
-			'base'     => isset( $screen->base ) ? $screen->base : '',
-			'response' => geg_get_response_state(),
-		)
-	);
-}
-
-/**
- * Capture current response state for redirect debugging.
- *
- * @return array<string,mixed>
- */
-function geg_get_response_state() {
-	$headers_sent = headers_sent( $file, $line );
-	$headers_list = function_exists( 'headers_list' ) ? headers_list() : array();
-
-	return array(
-		'headers_sent'   => $headers_sent,
-		'headers_file'   => $file,
-		'headers_line'   => $line,
-		'ob_level'       => ob_get_level(),
-		'ob_length'      => function_exists( 'ob_get_length' ) ? ob_get_length() : false,
-		'output_buffers' => geg_describe_output_buffers(),
-		'headers'        => array_slice( is_array( $headers_list ) ? $headers_list : array(), 0, 20 ),
-	);
-}
-
-/**
- * Decide whether the current request should be traced.
- *
- * @return bool
- */
-function geg_should_trace_request() {
-	$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
-	$script_name = isset( $_SERVER['SCRIPT_NAME'] ) ? (string) wp_unslash( $_SERVER['SCRIPT_NAME'] ) : '';
-	$page_param  = isset( $_GET['page'] ) ? (string) wp_unslash( $_GET['page'] ) : '';
-	$plugin      = isset( $_GET['plugin'] ) ? (string) wp_unslash( $_GET['plugin'] ) : '';
-
-	if ( false !== strpos( $request_uri, 'plugins.php' ) ) {
-		return true;
-	}
-
-	if ( false !== strpos( $script_name, 'plugins.php' ) ) {
-		return true;
-	}
-
-	if ( false !== strpos( $plugin, 'gesamtergebnis-etappenrennen/gesamtergebnis.php' ) ) {
-		return true;
-	}
-
-	return in_array( $page_param, array( 'geg-run-main-ingest', 'geg-run-make-resultsfiles' ), true );
-}
-
-/**
- * Sanitize request data before writing it to the log.
- *
- * @param array $request Request array.
- *
- * @return array
- */
-function geg_sanitize_request_array( $request ) {
-	if ( ! is_array( $request ) ) {
-		return array();
-	}
-
-	$sanitized = array();
-
-	foreach ( $request as $key => $value ) {
-		$sanitized_key = sanitize_key( (string) $key );
-
-		if ( is_scalar( $value ) ) {
-			$sanitized[ $sanitized_key ] = sanitize_text_field( (string) wp_unslash( $value ) );
-			continue;
-		}
-
-		$sanitized[ $sanitized_key ] = '[non-scalar]';
-	}
-
-	return $sanitized;
 }
 
 /**
@@ -179,7 +33,6 @@ function geg_sanitize_request_array( $request ) {
  */
 function geg_handle_activation() {
 	$checks = geg_collect_environment_checks();
-	geg_trace_bootstrap_phase( 'activation_hook_start' );
 
 	geg_write_log(
 		'info',
@@ -194,90 +47,11 @@ function geg_handle_activation() {
 	if ( ! empty( $checks['warnings'] ) ) {
 		set_transient( 'geg_admin_notices', $checks['warnings'], MINUTE_IN_SECONDS * 10 );
 		geg_write_log( 'warning', 'Plugin activation completed with warnings.', array( 'warnings' => $checks['warnings'] ) );
-		geg_trace_bootstrap_phase( 'activation_hook_end_with_warnings' );
 		return;
 	}
 
 	delete_transient( 'geg_admin_notices' );
 	geg_write_log( 'info', 'Plugin activation completed successfully.' );
-	geg_trace_bootstrap_phase( 'activation_hook_end_success' );
-
-	geg_maybe_render_activation_redirect_fallback();
-}
-
-/**
- * Fallback for environments where another plugin has already sent output.
- *
- * WordPress will call wp_redirect() after activation and then exit. If headers were
- * sent too early by a third-party plugin, that redirect fails and the user sees a
- * white screen. This fallback performs a client-side redirect only in that case.
- */
-function geg_maybe_render_activation_redirect_fallback() {
-	if ( ! geg_is_current_plugin_activation_request() ) {
-		return;
-	}
-
-	$headers_sent = headers_sent();
-
-	if ( ! $headers_sent ) {
-		return;
-	}
-
-	$redirect_url = geg_get_activation_return_url();
-
-	geg_write_log(
-		'warning',
-		'Activation redirect fallback rendered because headers were already sent.',
-		array(
-			'redirect_url' => $redirect_url,
-		)
-	);
-
-	echo '<!doctype html><html><head><meta charset="utf-8"><title>Weiterleitung</title>';
-	echo '<meta http-equiv="refresh" content="0;url=' . esc_url( $redirect_url ) . '">';
-	echo '</head><body>';
-	echo '<script>window.location.href=' . wp_json_encode( $redirect_url ) . ';</script>';
-	echo '<p>Weiterleitung zur Plugin-Uebersicht...</p>';
-	echo '<p><a href="' . esc_url( $redirect_url ) . '">Falls die Weiterleitung nicht automatisch funktioniert, hier klicken.</a></p>';
-	echo '</body></html>';
-	exit;
-}
-
-/**
- * Check whether this request is activating this plugin.
- *
- * @return bool
- */
-function geg_is_current_plugin_activation_request() {
-	$action = isset( $_GET['action'] ) ? sanitize_key( (string) wp_unslash( $_GET['action'] ) ) : '';
-	$plugin = isset( $_GET['plugin'] ) ? sanitize_text_field( (string) wp_unslash( $_GET['plugin'] ) ) : '';
-
-	if ( 'activate' !== $action ) {
-		return false;
-	}
-
-	return plugin_basename( __FILE__ ) === $plugin;
-}
-
-/**
- * Build return URL for activation fallback.
- *
- * @return string
- */
-function geg_get_activation_return_url() {
-	$args = array(
-		'activate' => 'true',
-	);
-
-	$passthrough_keys = array( 'plugin_status', 'paged', 's' );
-
-	foreach ( $passthrough_keys as $key ) {
-		if ( isset( $_GET[ $key ] ) ) {
-			$args[ $key ] = sanitize_text_field( (string) wp_unslash( $_GET[ $key ] ) );
-		}
-	}
-
-	return add_query_arg( $args, self_admin_url( 'plugins.php' ) );
 }
 
 /**
@@ -346,21 +120,8 @@ function geg_collect_environment_checks() {
  */
 function geg_capture_shutdown_error() {
 	$error = error_get_last();
-	$trace = geg_should_trace_request();
 
 	if ( empty( $error ) || ! is_array( $error ) ) {
-		if ( $trace ) {
-			geg_write_log(
-				'debug',
-				'Request finished without fatal shutdown error.',
-				array(
-					'uri'            => isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '',
-					'response'       => geg_get_response_state(),
-					'memory_peak_mb' => round( memory_get_peak_usage( true ) / 1048576, 2 ),
-				)
-			);
-		}
-
 		return;
 	}
 
@@ -381,37 +142,6 @@ function geg_capture_shutdown_error() {
 			'uri'     => isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '',
 		)
 	);
-}
-
-/**
- * Describe the active output buffers for debugging redirect issues.
- *
- * @return array<int,array<string,mixed>>
- */
-function geg_describe_output_buffers() {
-	if ( ! function_exists( 'ob_get_status' ) ) {
-		return array();
-	}
-
-	$statuses = ob_get_status( true );
-
-	if ( ! is_array( $statuses ) ) {
-		return array();
-	}
-
-	$buffers = array();
-
-	foreach ( $statuses as $status ) {
-		$buffers[] = array(
-			'name'   => isset( $status['name'] ) ? $status['name'] : '',
-			'type'   => isset( $status['type'] ) ? $status['type'] : '',
-			'level'  => isset( $status['level'] ) ? $status['level'] : '',
-			'size'   => isset( $status['buffer_size'] ) ? $status['buffer_size'] : '',
-			'length' => isset( $status['buffer_used'] ) ? $status['buffer_used'] : '',
-		);
-	}
-
-	return $buffers;
 }
 
 /**
