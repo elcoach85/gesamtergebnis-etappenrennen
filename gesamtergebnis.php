@@ -244,14 +244,21 @@ function geg_collect_environment_checks() {
  */
 function geg_capture_shutdown_error() {
 	$error = error_get_last();
+	$trace = geg_should_trace_request();
 
 	if ( empty( $error ) || ! is_array( $error ) ) {
-		if ( geg_should_trace_request() ) {
+		if ( $trace ) {
 			geg_write_log(
 				'debug',
 				'Request finished without fatal shutdown error.',
 				array(
 					'uri'            => isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '',
+					'headers_sent'   => headers_sent( $file, $line ),
+					'headers_file'   => isset( $file ) ? $file : '',
+					'headers_line'   => isset( $line ) ? $line : 0,
+					'ob_level'       => ob_get_level(),
+					'ob_length'      => function_exists( 'ob_get_length' ) ? ob_get_length() : false,
+					'output_buffers' => geg_describe_output_buffers(),
 					'memory_peak_mb' => round( memory_get_peak_usage( true ) / 1048576, 2 ),
 				)
 			);
@@ -277,6 +284,37 @@ function geg_capture_shutdown_error() {
 			'uri'     => isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '',
 		)
 	);
+}
+
+/**
+ * Describe the active output buffers for debugging redirect issues.
+ *
+ * @return array<int,array<string,mixed>>
+ */
+function geg_describe_output_buffers() {
+	if ( ! function_exists( 'ob_get_status' ) ) {
+		return array();
+	}
+
+	$statuses = ob_get_status( true );
+
+	if ( ! is_array( $statuses ) ) {
+		return array();
+	}
+
+	$buffers = array();
+
+	foreach ( $statuses as $status ) {
+		$buffers[] = array(
+			'name'   => isset( $status['name'] ) ? $status['name'] : '',
+			'type'   => isset( $status['type'] ) ? $status['type'] : '',
+			'level'  => isset( $status['level'] ) ? $status['level'] : '',
+			'size'   => isset( $status['buffer_size'] ) ? $status['buffer_size'] : '',
+			'length' => isset( $status['buffer_used'] ) ? $status['buffer_used'] : '',
+		);
+	}
+
+	return $buffers;
 }
 
 /**
