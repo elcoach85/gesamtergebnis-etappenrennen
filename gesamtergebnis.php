@@ -20,12 +20,136 @@ defined( 'GESAMTERGEBNIS_TOOL_DIR' ) || define( 'GESAMTERGEBNIS_TOOL_DIR', GESAM
 defined( 'GESAMTERGEBNIS_LOG_DIR' ) || define( 'GESAMTERGEBNIS_LOG_DIR', GESAMTERGEBNIS_PLUGIN_DIR . 'logs/' );
 defined( 'GESAMTERGEBNIS_LOG_FILE' ) || define( 'GESAMTERGEBNIS_LOG_FILE', GESAMTERGEBNIS_LOG_DIR . 'gesamtergebnis.log' );
 
+geg_trace_bootstrap_phase( 'plugin_file_loaded' );
+
 register_shutdown_function( 'geg_capture_shutdown_error' );
 register_activation_hook( __FILE__, 'geg_handle_activation' );
 
 if ( is_admin() ) {
+	geg_trace_bootstrap_phase( 'is_admin_true' );
 	add_action( 'admin_menu', 'geg_register_tools_pages' );
 	add_action( 'admin_notices', 'geg_render_admin_notices' );
+	add_action( 'plugins_loaded', 'geg_trace_plugins_loaded', 1 );
+	add_action( 'admin_init', 'geg_trace_admin_init', 1 );
+	add_action( 'current_screen', 'geg_trace_current_screen', 1 );
+	add_action( 'load-plugins.php', 'geg_trace_load_plugins_page', 1 );
+}
+
+/**
+ * Trace plugin bootstrap during relevant admin requests.
+ *
+ * @param string $phase Marker for the current phase.
+ */
+function geg_trace_bootstrap_phase( $phase ) {
+	if ( ! geg_should_trace_request() ) {
+		return;
+	}
+
+	geg_write_log(
+		'debug',
+		'Bootstrap phase reached.',
+		array(
+			'phase'       => $phase,
+			'uri'         => isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '',
+			'script_name' => isset( $_SERVER['SCRIPT_NAME'] ) ? wp_unslash( $_SERVER['SCRIPT_NAME'] ) : '',
+			'get'         => geg_sanitize_request_array( $_GET ),
+		)
+	);
+}
+
+/**
+ * Trace plugins_loaded for the current request.
+ */
+function geg_trace_plugins_loaded() {
+	geg_trace_bootstrap_phase( 'plugins_loaded' );
+}
+
+/**
+ * Trace admin_init for the current request.
+ */
+function geg_trace_admin_init() {
+	geg_trace_bootstrap_phase( 'admin_init' );
+}
+
+/**
+ * Trace loading of plugins.php.
+ */
+function geg_trace_load_plugins_page() {
+	geg_trace_bootstrap_phase( 'load_plugins_php' );
+}
+
+/**
+ * Trace current admin screen.
+ *
+ * @param WP_Screen $screen Current screen object.
+ */
+function geg_trace_current_screen( $screen ) {
+	if ( ! geg_should_trace_request() ) {
+		return;
+	}
+
+	geg_write_log(
+		'debug',
+		'Current screen resolved.',
+		array(
+			'id'   => isset( $screen->id ) ? $screen->id : '',
+			'base' => isset( $screen->base ) ? $screen->base : '',
+		)
+	);
+}
+
+/**
+ * Decide whether the current request should be traced.
+ *
+ * @return bool
+ */
+function geg_should_trace_request() {
+	$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
+	$script_name = isset( $_SERVER['SCRIPT_NAME'] ) ? (string) wp_unslash( $_SERVER['SCRIPT_NAME'] ) : '';
+	$page_param  = isset( $_GET['page'] ) ? (string) wp_unslash( $_GET['page'] ) : '';
+	$plugin      = isset( $_GET['plugin'] ) ? (string) wp_unslash( $_GET['plugin'] ) : '';
+
+	if ( false !== strpos( $request_uri, 'plugins.php' ) ) {
+		return true;
+	}
+
+	if ( false !== strpos( $script_name, 'plugins.php' ) ) {
+		return true;
+	}
+
+	if ( false !== strpos( $plugin, 'gesamtergebnis-etappenrennen/gesamtergebnis.php' ) ) {
+		return true;
+	}
+
+	return in_array( $page_param, array( 'geg-run-main-ingest', 'geg-run-make-resultsfiles' ), true );
+}
+
+/**
+ * Sanitize request data before writing it to the log.
+ *
+ * @param array $request Request array.
+ *
+ * @return array
+ */
+function geg_sanitize_request_array( $request ) {
+	if ( ! is_array( $request ) ) {
+		return array();
+	}
+
+	$sanitized = array();
+
+	foreach ( $request as $key => $value ) {
+		$sanitized_key = sanitize_key( (string) $key );
+
+		if ( is_scalar( $value ) ) {
+			$sanitized[ $sanitized_key ] = sanitize_text_field( (string) wp_unslash( $value ) );
+			continue;
+		}
+
+		$sanitized[ $sanitized_key ] = '[non-scalar]';
+	}
+
+	return $sanitized;
 }
 
 /**
@@ -122,6 +246,17 @@ function geg_capture_shutdown_error() {
 	$error = error_get_last();
 
 	if ( empty( $error ) || ! is_array( $error ) ) {
+		if ( geg_should_trace_request() ) {
+			geg_write_log(
+				'debug',
+				'Request finished without fatal shutdown error.',
+				array(
+					'uri'            => isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '',
+					'memory_peak_mb' => round( memory_get_peak_usage( true ) / 1048576, 2 ),
+				)
+			);
+		}
+
 		return;
 	}
 
