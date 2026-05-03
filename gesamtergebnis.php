@@ -20,7 +20,129 @@ defined( 'GESAMTERGEBNIS_TOOL_DIR' ) || define( 'GESAMTERGEBNIS_TOOL_DIR', GESAM
 defined( 'GESAMTERGEBNIS_LOG_DIR' ) || define( 'GESAMTERGEBNIS_LOG_DIR', GESAMTERGEBNIS_PLUGIN_DIR . 'logs/' );
 defined( 'GESAMTERGEBNIS_LOG_FILE' ) || define( 'GESAMTERGEBNIS_LOG_FILE', GESAMTERGEBNIS_LOG_DIR . 'gesamtergebnis.log' );
 
-add_action( 'admin_menu', 'geg_register_tools_pages' );
+register_shutdown_function( 'geg_capture_shutdown_error' );
+register_activation_hook( __FILE__, 'geg_handle_activation' );
+
+if ( is_admin() ) {
+	add_action( 'admin_menu', 'geg_register_tools_pages' );
+	add_action( 'admin_notices', 'geg_render_admin_notices' );
+}
+
+/**
+ * Handle plugin activation diagnostics.
+ */
+function geg_handle_activation() {
+	$checks = geg_collect_environment_checks();
+
+	geg_write_log(
+		'info',
+		'Plugin activation started.',
+		array(
+			'php_version' => PHP_VERSION,
+			'is_admin'    => is_admin(),
+			'checks'      => $checks,
+		)
+	);
+
+	if ( ! empty( $checks['warnings'] ) ) {
+		set_transient( 'geg_admin_notices', $checks['warnings'], MINUTE_IN_SECONDS * 10 );
+		geg_write_log( 'warning', 'Plugin activation completed with warnings.', array( 'warnings' => $checks['warnings'] ) );
+		return;
+	}
+
+	delete_transient( 'geg_admin_notices' );
+	geg_write_log( 'info', 'Plugin activation completed successfully.' );
+}
+
+/**
+ * Render deferred notices gathered during activation.
+ */
+function geg_render_admin_notices() {
+	$messages = get_transient( 'geg_admin_notices' );
+
+	if ( empty( $messages ) || ! is_array( $messages ) ) {
+		return;
+	}
+
+	delete_transient( 'geg_admin_notices' );
+
+	foreach ( $messages as $message ) {
+		printf(
+			'<div class="notice notice-warning"><p>%s</p></div>',
+			esc_html( $message )
+		);
+	}
+}
+
+/**
+ * Collect environment checks relevant for activation and execution.
+ *
+ * @return array{warnings:array<int,string>,tool_dir:string,main_ingest_exists:bool,resultsfiles_exists:bool,proc_open:bool,shell_exec:bool}
+ */
+function geg_collect_environment_checks() {
+	$tool_dir            = realpath( GESAMTERGEBNIS_TOOL_DIR );
+	$main_ingest_path    = GESAMTERGEBNIS_TOOL_DIR . 'main_ingest.py';
+	$resultsfiles_path   = GESAMTERGEBNIS_TOOL_DIR . 'make_resultsfiles.py';
+	$warnings            = array();
+	$main_ingest_exists  = file_exists( $main_ingest_path );
+	$resultsfiles_exists = file_exists( $resultsfiles_path );
+	$proc_open_exists    = function_exists( 'proc_open' );
+	$shell_exec_exists   = function_exists( 'shell_exec' );
+
+	if ( false === $tool_dir ) {
+		$warnings[] = 'Tool-Verzeichnis konnte nicht aufgeloest werden: ' . GESAMTERGEBNIS_TOOL_DIR;
+	}
+
+	if ( ! $main_ingest_exists ) {
+		$warnings[] = 'main_ingest.py wurde nicht gefunden: ' . $main_ingest_path;
+	}
+
+	if ( ! $resultsfiles_exists ) {
+		$warnings[] = 'make_resultsfiles.py wurde nicht gefunden: ' . $resultsfiles_path;
+	}
+
+	if ( ! $proc_open_exists && ! $shell_exec_exists ) {
+		$warnings[] = 'Weder proc_open noch shell_exec stehen zur Verfuegung. Python-Skripte koennen so nicht gestartet werden.';
+	}
+
+	return array(
+		'warnings'            => $warnings,
+		'tool_dir'            => false === $tool_dir ? GESAMTERGEBNIS_TOOL_DIR : $tool_dir,
+		'main_ingest_exists'  => $main_ingest_exists,
+		'resultsfiles_exists' => $resultsfiles_exists,
+		'proc_open'           => $proc_open_exists,
+		'shell_exec'          => $shell_exec_exists,
+	);
+}
+
+/**
+ * Capture fatal shutdown errors for activation debugging.
+ */
+function geg_capture_shutdown_error() {
+	$error = error_get_last();
+
+	if ( empty( $error ) || ! is_array( $error ) ) {
+		return;
+	}
+
+	$fatal_types = array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR );
+
+	if ( ! in_array( $error['type'], $fatal_types, true ) ) {
+		return;
+	}
+
+	geg_write_log(
+		'critical',
+		'Fatal PHP shutdown error captured.',
+		array(
+			'type'    => $error['type'],
+			'message' => $error['message'],
+			'file'    => $error['file'],
+			'line'    => $error['line'],
+			'uri'     => isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '',
+		)
+	);
+}
 
 /**
  * Register entries in the "Tools" menu.
@@ -232,7 +354,11 @@ function geg_execute_python_script( $script_name ) {
  */
 function geg_write_log( $level, $message, $context = array() ) {
 	if ( ! is_dir( GESAMTERGEBNIS_LOG_DIR ) ) {
-		wp_mkdir_p( GESAMTERGEBNIS_LOG_DIR );
+		if ( function_exists( 'wp_mkdir_p' ) ) {
+			wp_mkdir_p( GESAMTERGEBNIS_LOG_DIR );
+		} else {
+			@mkdir( GESAMTERGEBNIS_LOG_DIR, 0755, true );
+		}
 	}
 
 	$timestamp = gmdate( 'Y-m-d H:i:s' );
@@ -244,7 +370,7 @@ function geg_write_log( $level, $message, $context = array() ) {
 
 	$line = sprintf( "[%s] [%s] %s%s\n", $timestamp, strtoupper( (string) $level ), $message, $context_s );
 
-	file_put_contents( GESAMTERGEBNIS_LOG_FILE, $line, FILE_APPEND );
+	@file_put_contents( GESAMTERGEBNIS_LOG_FILE, $line, FILE_APPEND );
 }
 
 /**
